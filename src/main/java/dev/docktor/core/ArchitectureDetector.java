@@ -9,13 +9,20 @@ public class ArchitectureDetector {
   }
 
   public String normalize(String architecture) {
+    if (architecture == null || architecture.isBlank()) {
+      throw new IllegalArgumentException("Architecture must not be blank");
+    }
+
     var normalized = architecture.toLowerCase(Locale.ROOT);
+
     if (normalized.equals("aarch64") || normalized.equals("arm64")) {
       return "arm64";
     }
+
     if (normalized.equals("x86_64") || normalized.equals("amd64")) {
       return "x86_64";
     }
-    return normalized;
+
+    throw new IllegalArgumentException("Unsupported architecture: " + architecture);
   }
 }

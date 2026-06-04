@@ -8,8 +8,8 @@ import dev.docktor.diagnostics.DoctorService;
 import dev.docktor.diagnostics.PortChecker;
 import dev.docktor.docker.DockerContextManager;
 import dev.docktor.docker.DockerManager;
-import dev.docktor.lima.LimaConfigGenerator;
-import dev.docktor.lima.LimaManager;
+import dev.docktor.qemu.QemuConfigGenerator;
+import dev.docktor.qemu.QemuManager;
 import picocli.CommandLine;
 
 public final class DocktorApplication {
@@ -28,23 +28,43 @@ public final class DocktorApplication {
     var portChecker = new PortChecker();
     var dockerManager = new DockerManager(commandRunner);
     var dockerContextManager = new DockerContextManager(commandRunner);
-    var limaConfigGenerator = new LimaConfigGenerator();
-    var limaManager = new LimaManager(commandRunner, limaConfigGenerator);
+
+    var qemuConfigGenerator = new QemuConfigGenerator(architectureDetector);
+
+    var qemuManager = new QemuManager(commandRunner, qemuConfigGenerator, dockerContextManager);
+
     var doctorService =
         new DoctorService(
-            osDetector, architectureDetector, toolChecker, dockerManager, portChecker);
+            osDetector,
+            architectureDetector,
+            toolChecker,
+            dockerManager,
+            portChecker,
+            qemuConfigGenerator);
 
     var root = new DocktorCommand();
     var commandLine = new CommandLine(root);
+
     commandLine.addSubcommand("doctor", new DoctorCommand(doctorService));
     commandLine.addSubcommand(
-        "status", new StatusCommand(limaManager, dockerManager, dockerContextManager));
-    commandLine.addSubcommand("start", new StartCommand(limaManager));
-    commandLine.addSubcommand("stop", new StopCommand(limaManager));
-    commandLine.addSubcommand("ssh", new SshCommand(limaManager));
+        "status", new StatusCommand(qemuManager, dockerManager, dockerContextManager));
+    commandLine.addSubcommand("start", new StartCommand(qemuManager));
+    commandLine.addSubcommand("stop", new StopCommand(qemuManager));
+    commandLine.addSubcommand("ssh", new SshCommand(qemuManager));
+    commandLine.addSubcommand("reset", new ResetCommand(qemuManager));
+
+    var qemu = new CommandLine(new QemuCommand());
+    qemu.addSubcommand(
+        "status", new StatusCommand(qemuManager, dockerManager, dockerContextManager));
+    qemu.addSubcommand("start", new StartCommand(qemuManager));
+    qemu.addSubcommand("stop", new StopCommand(qemuManager));
+    qemu.addSubcommand("ssh", new SshCommand(qemuManager));
+    qemu.addSubcommand("reset", new ResetCommand(qemuManager));
+    commandLine.addSubcommand("qemu", qemu);
 
     var docker = new CommandLine(new DockerCommand());
     docker.addSubcommand("check", new DockerCheckCommand(doctorService));
+    docker.addSubcommand("context", new DockerContextCommand(dockerContextManager));
     commandLine.addSubcommand("docker", docker);
 
     return commandLine;

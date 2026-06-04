@@ -23,4 +23,11 @@ public class FakeCommandRunner implements CommandRunner {
     commands.add(command);
     return results.getOrDefault(command, new ProcessResult(1, "", "not found"));
   }
+
+  @Override
+  public ProcessResult runInteractive(List<String> command)
+      throws IOException, InterruptedException {
+    commands.add(command);
+    return results.getOrDefault(command, new ProcessResult(1, "", "not found"));
+  }
 }

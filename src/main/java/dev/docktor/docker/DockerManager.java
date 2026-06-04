@@ -30,18 +30,4 @@ public class DockerManager {
         "Docker Engine is not running, the Docker context is wrong, or the VM Docker socket is not available.",
         "Start the VM and configure the local Docker context to the Docktor VM.");
   }
-
-  public DiagnosticMessage verifyEngineInsideVm() {
-    return DiagnosticMessage.warning(
-        "Docker Engine inside VM check is not implemented yet",
-        "Real VM provisioning is outside the first milestone.",
-        "Implement Lima SSH command execution and run docker info inside the VM.");
-  }
-
-  public DiagnosticMessage installEngineInsideVmIfMissing() {
-    return DiagnosticMessage.warning(
-        "Docker Engine installation inside VM is not implemented yet",
-        "Docktor is currently diagnostics-only for the first milestone.",
-        "Add a package installation flow after VM provisioning is implemented.");
-  }
 }
