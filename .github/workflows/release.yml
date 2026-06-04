@@ -1,0 +1,170 @@
+name: Release Native Binaries
+
+on:
+  push:
+    tags:
+      - "v*"
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Existing release tag, for example v0.1.0"
+        required: true
+        type: string
+
+permissions:
+  contents: write
+
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+  RELEASE_VERSION: ${{ github.event_name == 'workflow_dispatch' && inputs.version || github.ref_name }}
+
+jobs:
+  build:
+    name: Build ${{ matrix.asset_arch }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: macos-14
+            asset_arch: arm64
+          - os: macos-15-intel
+            asset_arch: x64
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up GraalVM JDK 21
+        uses: graalvm/setup-graalvm@v1
+        with:
+          java-version: "21"
+          distribution: "graalvm"
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          native-image-job-reports: true
+
+      - name: Run tests
+        run: ./gradlew clean test --info
+
+      - name: Build native executable
+        run: ./gradlew clean nativeCompile
+
+      - name: Verify native executable
+        run: |
+          test -x build/native/nativeCompile/docktor
+          build/native/nativeCompile/docktor --version
+
+      - name: Package native executable
+        run: |
+          archive="docktor-${RELEASE_VERSION}-macos-${{ matrix.asset_arch }}.tar.gz"
+          checksum="docktor-${RELEASE_VERSION}-macos-${{ matrix.asset_arch }}.sha256"
+
+          mkdir -p dist/docktor
+          cp build/native/nativeCompile/docktor dist/docktor/docktor
+          chmod +x dist/docktor/docktor
+
+          tar -czf "${archive}" -C dist/docktor docktor
+          tar -tzf "${archive}"
+
+          shasum -a 256 "${archive}" | tee "${checksum}"
+
+      - name: Upload native binary archive
+        uses: actions/upload-artifact@v4
+        with:
+          name: docktor-${{ env.RELEASE_VERSION }}-macos-${{ matrix.asset_arch }}
+          path: |
+            docktor-${{ env.RELEASE_VERSION }}-macos-${{ matrix.asset_arch }}.tar.gz
+            docktor-${{ env.RELEASE_VERSION }}-macos-${{ matrix.asset_arch }}.sha256
+          if-no-files-found: error
+
+  release:
+    name: Publish GitHub Release
+    runs-on: ubuntu-latest
+    needs: build
+
+    steps:
+      - name: Download native binary archives
+        uses: actions/download-artifact@v4
+        with:
+          pattern: docktor-${{ env.RELEASE_VERSION }}-macos-*
+          merge-multiple: true
+
+      - name: Create or update GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ env.RELEASE_VERSION }}
+          name: Docktor ${{ env.RELEASE_VERSION }}
+          files: |
+            docktor-${{ env.RELEASE_VERSION }}-macos-*.tar.gz
+            docktor-${{ env.RELEASE_VERSION }}-macos-*.sha256
+          fail_on_unmatched_files: true
+
+  update-homebrew-tap:
+    name: Update Homebrew Tap
+    runs-on: ubuntu-latest
+    needs: release
+
+    steps:
+      - name: Download native binary archives
+        uses: actions/download-artifact@v4
+        with:
+          pattern: docktor-${{ env.RELEASE_VERSION }}-macos-*
+          merge-multiple: true
+
+      - name: Read checksums
+        id: checksums
+        run: |
+          ARM64_SHA=$(cut -d ' ' -f 1 docktor-${RELEASE_VERSION}-macos-arm64.sha256)
+          X64_SHA=$(cut -d ' ' -f 1 docktor-${RELEASE_VERSION}-macos-x64.sha256)
+
+          echo "arm64_sha=${ARM64_SHA}" >> "$GITHUB_OUTPUT"
+          echo "x64_sha=${X64_SHA}" >> "$GITHUB_OUTPUT"
+
+      - name: Checkout Homebrew tap
+        uses: actions/checkout@v4
+        with:
+          repository: fullstack-sargis/homebrew-docktor
+          token: ${{ secrets.HOMEBREW_TAP_TOKEN }}
+          path: homebrew-docktor
+
+      - name: Update formula
+        working-directory: homebrew-docktor
+        run: |
+          VERSION="${RELEASE_VERSION#v}"
+          TAG="${RELEASE_VERSION}"
+          ARM64_SHA="${{ steps.checksums.outputs.arm64_sha }}"
+          X64_SHA="${{ steps.checksums.outputs.x64_sha }}"
+
+          cat > Formula/docktor.rb <<EOF
+          class Docktor < Formula
+            desc "QEMU-based Docker VM CLI for macOS"
+            homepage "https://github.com/fullstack-sargis/docktor"
+            version "${VERSION}"
+
+            if Hardware::CPU.arm?
+              url "https://github.com/fullstack-sargis/docktor/releases/download/${TAG}/docktor-${TAG}-macos-arm64.tar.gz"
+              sha256 "${ARM64_SHA}"
+            else
+              url "https://github.com/fullstack-sargis/docktor/releases/download/${TAG}/docktor-${TAG}-macos-x64.tar.gz"
+              sha256 "${X64_SHA}"
+            end
+
+            def install
+              bin.install "docktor"
+            end
+
+            test do
+              system "#{bin}/docktor", "--help"
+            end
+          end
+          EOF
+
+      - name: Commit and push formula update
+        working-directory: homebrew-docktor
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+
+          git add Formula/docktor.rb
+          git commit -m "Update Docktor to ${RELEASE_VERSION}" || exit 0
+          git push

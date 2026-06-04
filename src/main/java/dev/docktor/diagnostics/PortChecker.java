@@ -11,7 +11,7 @@ public class PortChecker {
   public boolean canConnect(String host, int port) {
     return canConnect(host, port, DEFAULT_TIMEOUT);
   }
-  
+
   public boolean canConnect(String host, int port, Duration timeout) {
     try (var socket = new Socket()) {
       socket.connect(new InetSocketAddress(host, port), Math.toIntExact(timeout.toMillis()));

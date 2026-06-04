@@ -11,7 +11,10 @@ class DocktorApplicationTest {
     var commandLine = DocktorApplication.createCommandLine();
 
     assertThat(commandLine.getSubcommands())
-        .containsOnlyKeys("doctor", "status", "start", "stop", "ssh", "docker");
-    assertThat(commandLine.getSubcommands().get("docker").getSubcommands()).containsKey("check");
+        .containsOnlyKeys("doctor", "status", "start", "stop", "ssh", "reset", "qemu", "docker");
+    assertThat(commandLine.getSubcommands().get("qemu").getSubcommands())
+        .containsOnlyKeys("status", "start", "stop", "ssh", "reset");
+    assertThat(commandLine.getSubcommands().get("docker").getSubcommands())
+        .containsOnlyKeys("check", "context");
   }
 }

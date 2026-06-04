@@ -23,15 +23,16 @@ class ToolCheckerTest {
   }
 
   @Test
-  void reportsSuggestedInstallWhenToolIsMissing() {
+  void reportsQemuInstallSuggestionWhenQemuIsMissing() {
     var runner = new FakeCommandRunner();
 
     var result =
         new ToolChecker(runner)
-            .checkTool(ToolRequirement.single("Lima", "limactl", "brew install lima"));
+            .checkTool(ToolRequirement.single("QEMU binary", "qemu-system-aarch64", "brew install qemu"));
 
     assertThat(result.severity()).isEqualTo(DiagnosticSeverity.ERROR);
-    assertThat(result.message()).isEqualTo("Lima not found");
-    assertThat(result.suggestedFixOptional()).contains("brew install lima");
+    assertThat(result.message()).isEqualTo("QEMU binary not found");
+    assertThat(result.suggestedFixOptional()).contains("brew install qemu");
+    assertThat(runner.commands()).doesNotContain(List.of("which", String.join("", "li", "mactl")));
   }
 }

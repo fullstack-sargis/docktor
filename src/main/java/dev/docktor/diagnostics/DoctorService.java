@@ -5,6 +5,7 @@ import dev.docktor.core.OsDetector;
 import dev.docktor.core.ToolChecker;
 import dev.docktor.core.ToolChecker.ToolRequirement;
 import dev.docktor.docker.DockerManager;
+import dev.docktor.qemu.QemuConfigGenerator;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -13,17 +14,20 @@ public class DoctorService {
   private final ArchitectureDetector architectureDetector;
   private final ToolChecker toolChecker;
   private final DockerManager dockerManager;
+  private final QemuConfigGenerator qemuConfigGenerator;
 
   public DoctorService(
       OsDetector osDetector,
       ArchitectureDetector architectureDetector,
       ToolChecker toolChecker,
       DockerManager dockerManager,
-      PortChecker portChecker) {
+      PortChecker portChecker,
+      QemuConfigGenerator qemuConfigGenerator) {
     this.osDetector = osDetector;
     this.architectureDetector = architectureDetector;
     this.toolChecker = toolChecker;
     this.dockerManager = dockerManager;
+    this.qemuConfigGenerator = qemuConfigGenerator;
   }
 
   public List<DiagnosticMessage> runDoctor() {
@@ -43,10 +47,10 @@ public class DoctorService {
 
   public List<DiagnosticMessage> checkRequiredTools() {
     return List.of(
-        toolChecker.checkTool(ToolRequirement.single("Lima", "limactl", "brew install lima")),
         toolChecker.checkTool(
-            new ToolRequirement(
-                "QEMU", List.of("qemu-system-aarch64", "qemu-system-x86_64"), "brew install qemu")),
+            ToolRequirement.single(
+                "QEMU binary", qemuConfigGenerator.qemuBinary(), "brew install qemu")),
+        toolChecker.checkTool(ToolRequirement.single("qemu-img", "qemu-img", "brew install qemu")),
         toolChecker.checkTool(
             ToolRequirement.single("Docker CLI", "docker", "brew install --cask docker")));
   }
@@ -54,10 +58,12 @@ public class DoctorService {
   private DiagnosticMessage checkMacOs() {
     if (!osDetector.isMacOs()) {
       return DiagnosticMessage.warning(
-          "macOS not detected: " + osDetector.currentOsName(),
-          "Docktor's first milestone is designed for macOS hosts.",
-          "Run Docktor on macOS or add Linux host support later.");
+          "Unsupported host OS: " + osDetector.currentOsName(),
+          "The current Docktor build supports macOS hosts only.",
+          "Use a macOS host.");
     }
-    return DiagnosticMessage.ok("macOS detected: " + architectureDetector.currentArchitecture());
+
+    return DiagnosticMessage.ok(
+        "Host OS supported: macOS " + architectureDetector.currentArchitecture());
   }
 }
