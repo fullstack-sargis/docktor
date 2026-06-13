@@ -44,7 +44,7 @@ jobs:
           native-image-job-reports: true
 
       - name: Run tests
-        run: ./gradlew test
+        run: ./gradlew clean test --info
 
       - name: Build native executable
         run: ./gradlew clean nativeCompile
